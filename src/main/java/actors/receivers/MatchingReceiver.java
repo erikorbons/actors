@@ -18,14 +18,12 @@ public class MatchingReceiver implements Receiver {
   }
 
   @Override
-  public Receiver receive(Object message, MessageContext context) throws Exception {
-    System.out.println("Receiving: " + receivers);
+  public Optional<Receiver> receive(Object message, MessageContext context) throws Exception {
     return receivers.stream()
         .map(r -> wrapExceptions(() -> r.receive(message, context)))
         .filter(Optional::isPresent)
         .map(Optional::get)
-        .findFirst()
-        .orElse(context.getReceiver());
+        .findFirst();
   }
 
   private static <T> T wrapExceptions(final Callable<T> operation) {
@@ -43,7 +41,6 @@ public class MatchingReceiver implements Receiver {
 
     public <C> Builder match(final Class<C> cls, final Predicate<C> predicate, final ReceiveMessage<C> receiver) {
       receivers.add((msg, context) -> {
-        System.out.println("Matching: " + cls + ", " + msg.getClass());
         if (cls.isAssignableFrom(msg.getClass()) && predicate.test((C) msg)) {
           return Optional.of(receiver.receive((C) msg, context));
         }

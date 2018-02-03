@@ -5,5 +5,11 @@ package actors;
  * classes (mailbox, scheduler, etc.) and not to receivers.
  */
 public interface PrivateContext extends Context {
-  void dispatchMessage(Message message);
+
+  /**
+   *
+   * @param message
+   * @return true if the message was handled succesfully, false otherwise.
+   */
+  boolean dispatchMessage(Message message);
 }

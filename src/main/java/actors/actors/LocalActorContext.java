@@ -6,34 +6,122 @@ import actors.MessageContext;
 import actors.PrivateContext;
 import actors.Receiver;
 import actors.Scheduler;
+import actors.messages.ChildFailure;
+import actors.messages.MailboxSuspend;
+import actors.messages.MailboxTerminate;
+import actors.messages.Restart;
+import actors.messages.Stop;
+import actors.messages.ChildTerminated;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
-public class LocalActorContext implements PrivateContext {
+public class LocalActorContext extends LocalActorFactory implements PrivateContext {
 
-  private final Actor parentActor;
-  private final Scheduler scheduler;
+  private final LocalActor parentActor;
+
+  private final Map<String, LocalActor> children = new HashMap<>();
 
   // Mutable actor state:
-  private Actor self;
+  private LocalActor self;
   private Receiver currentReceiver;
 
-  public LocalActorContext(final Actor parentActor, final Scheduler scheduler) {
+  public LocalActorContext(final LocalActor parentActor, final Scheduler scheduler) {
+    super(scheduler);
     this.parentActor = parentActor;
-    this.scheduler = Objects.requireNonNull(scheduler);
 
     currentReceiver = Receiver.builder().build();
   }
 
   @Override
-  public void dispatchMessage(final Message message) {
+  public boolean dispatchMessage(final Message message) {
     try {
-      System.out.println("Dispatchign: " + message.getPayload());
-      getReceiver().receive(message.getPayload(), new LocalMessageContext(message.getSender()));
+      currentReceiver = getReceiver()
+          .receive(message.getPayload(), new LocalMessageContext(message.getSender()))
+          .orElseGet(() -> handleSystemMessages(message));
+      return true;
     } catch (Exception e) {
-      // TODO: Handle exceptions while dispatching messages.
-      e.printStackTrace();
+      handleFailure(e);
+      return false;
     }
+  }
+
+  private Receiver handleSystemMessages(final Message message) {
+    final Object payload = message.getPayload();
+
+    if (payload instanceof ChildFailure) {
+      // A failure was received for a child. Notify the child that it should
+      // restart:
+      ((LocalActor) message.getSender()).tellSystem(new Restart(), getSelf());
+    } else if (payload instanceof Restart) {
+
+    } else if (payload instanceof Stop) {
+      return stopping();
+    } else if (payload instanceof ChildTerminated) {
+
+    }
+
+    return currentReceiver;
+  }
+
+  private Receiver stopping() {
+    System.out.println("Stopping: " + getSelf().getName());
+
+    // Notify the mailbox that it should be suspended:
+    self.tellSystem(new MailboxSuspend(), getSelf());
+
+    // Notify all children that they should stop. Use normal message flow,
+    // let the children process previous messages:
+    if (children.isEmpty()) {
+      return stopped();
+    } else {
+      children.values().stream()
+          .forEach(childActor -> childActor.tell(new Stop(), getSelf()));
+    }
+
+    // Await termination of all the children, then terminate self:
+    return Receiver.builder()
+        .match(ChildTerminated.class, (msg, context) -> {
+          // Remove the child:
+          children.remove(context.getSender().getName());
+
+          if (children.isEmpty()) {
+            return stopped();
+          }
+
+          return children.isEmpty()
+              ? stopped()
+              : context.getReceiver();
+        })
+        .build();
+  }
+
+  private Receiver stopped() {
+    System.out.println("Stopped: " + getSelf().getName());
+
+    // Terminate the mailbox:
+    self.tellSystem(new MailboxTerminate(), getSelf());
+
+    // Notify the parent that this actor has terminated:
+    if (parentActor != null) {
+      parentActor.tellSystem(new ChildTerminated(), getSelf());
+    }
+
+    return Receiver.builder().build();
+  }
+
+  private void handleFailure(final Exception cause) {
+    // Notify the mailbox that message delivery should be suspended:
+    self.tellSystem(new MailboxSuspend(), getSelf());
+
+    // Notify the supervisor of the failure:
+    if (parentActor != null) {
+      parentActor.tellSystem(new ChildFailure(cause), getSelf());
+    }
+
+    cause.printStackTrace();
   }
 
   /**
@@ -44,7 +132,7 @@ public class LocalActorContext implements PrivateContext {
    * @param factory The factory method that will be used to create the initial receiver
    *    for this actor.
    */
-  public void initialize(final Actor self, final FactoryWithContext factory) {
+  public void initialize(final LocalActor self, final FactoryWithContext factory) {
     this.self = self;
     this.currentReceiver = factory.apply(this);
   }
@@ -65,18 +153,19 @@ public class LocalActorContext implements PrivateContext {
   }
 
   @Override
-  public Scheduler getScheduler() {
-    return scheduler;
+  public LocalActor spawn(final FactoryWithContext entry) {
+    return spawn(entry, "child-" + UUID.randomUUID().toString());
   }
 
   @Override
-  public Actor spawn(Factory entry) {
-    return null;
-  }
+  public LocalActor spawn(final FactoryWithContext entry, final String name) {
+    Objects.requireNonNull(name, "name cannot be null");
 
-  @Override
-  public Actor spawn(FactoryWithContext entry) {
-    return null;
+    final LocalActor actor = super.spawn(entry, name);
+
+    children.put(name, actor);
+
+    return actor;
   }
 
   private class LocalMessageContext implements MessageContext {
@@ -112,8 +201,13 @@ public class LocalActorContext implements PrivateContext {
     }
 
     @Override
-    public Actor spawn(FactoryWithContext entry) {
+    public Actor spawn(final FactoryWithContext entry) {
       return LocalActorContext.this.spawn(entry);
+    }
+
+    @Override
+    public Actor spawn(final FactoryWithContext entry, final String name) {
+      return LocalActorContext.this.spawn(entry, name);
     }
   }
 }

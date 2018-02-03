@@ -2,10 +2,10 @@ package actors;
 
 @FunctionalInterface
 public interface ActorFactory {
-  Actor spawn(FactoryWithContext entry);
+  Actor spawn(FactoryWithContext entry, String name);
 
-  default Actor spawn(Factory entry) {
-    return spawn(ctx -> entry.apply());
+  default Actor spawn(Factory entry, String name) {
+    return spawn(ctx -> entry.apply(), name);
   }
 
   @FunctionalInterface

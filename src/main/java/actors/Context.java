@@ -7,4 +7,9 @@ public interface Context extends ActorFactory {
   Optional<Actor> getParent();
   Receiver getReceiver();
   Scheduler getScheduler();
+  Actor spawn(FactoryWithContext entry);
+
+  default Actor spawn(Factory entry) {
+    return spawn(context -> entry.apply());
+  }
 }
