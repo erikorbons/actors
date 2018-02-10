@@ -19,12 +19,16 @@ public class LocalActorFactory implements ActorFactory {
 
   @Override
   public LocalActor spawn(final FactoryWithContext entry, final String name) {
+    return spawn(null, entry, name);
+  }
+
+  protected LocalActor spawn(final LocalActor parent, final FactoryWithContext entry, final String name) {
     Objects.requireNonNull(entry, "entry cannot be null");
     Objects.requireNonNull(name, "name cannot be null");
 
     // Create a blank context for the actor, with initial state and without a
     // parent actor.
-    final LocalActorContext context = new LocalActorContext(null, scheduler);
+    final LocalActorContext context = new LocalActorContext(parent, scheduler);
 
     // Create a mailbox that dispatches to the previously created actor context:
     final Mailbox mailbox = new DefaultMailbox(context);

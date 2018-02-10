@@ -15,4 +15,7 @@ include 'api'
 include 'services:webservice'
 */
 
-rootProject.name = 'actors'
+rootProject.name = 'surge'
+
+include 'actors'
+include 'core'
