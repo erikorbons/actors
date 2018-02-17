@@ -1,9 +1,12 @@
 package actors.actors;
 
+import actors.Actor;
 import actors.ActorFactory;
 import actors.Mailbox;
+import actors.Message;
 import actors.Scheduler;
 import actors.mailboxes.DefaultMailbox;
+import actors.messages.MailboxUnsuspend;
 import java.util.Objects;
 
 public class LocalActorFactory implements ActorFactory {
@@ -39,6 +42,21 @@ public class LocalActorFactory implements ActorFactory {
 
     // Initialize the context with the newly created actor:
     context.initialize(actor, entry);
+
+    // Unsuspend the mailbox after initialization. The mailbox starts suspended to
+    // prevent messages from being delivered while it is initializing:
+    final MailboxUnsuspend msg = new MailboxUnsuspend();
+    mailbox.enqueueSystemMessage(new Message() {
+      @Override
+      public Object getPayload() {
+        return msg;
+      }
+
+      @Override
+      public Actor getSender() {
+        return actor;
+      }
+    });
 
     return actor;
   }

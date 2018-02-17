@@ -13,14 +13,18 @@ import actors.messages.Kill;
 import actors.messages.MailboxSuspend;
 import actors.messages.MailboxTerminate;
 import actors.messages.MailboxUnsuspend;
+import actors.messages.ReceiveTimeout;
 import actors.messages.Restart;
+import actors.messages.SpawnChild;
 import actors.messages.Stop;
 import actors.messages.ChildTerminated;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -34,6 +38,8 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
   private FactoryWithContext initialFactory;
   private LocalActor self;
   private Receiver currentReceiver;
+  private Duration receiveTimeoutDuration = null;
+  private ScheduledFuture<?> receiveTimeout = null;
 
   public LocalActorContext(final LocalActor parentActor, final Scheduler scheduler) {
     super(scheduler);
@@ -57,6 +63,11 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
             .receive(message.getPayload(), new LocalMessageContext(message.getSender()))
             .orElseGet(() -> handleOverridableSystemMessages(message));
 
+      // Reset the receive timeout, if one is available:
+      if (receiveTimeoutDuration != null) {
+        setReceiveTimeout(receiveTimeoutDuration);
+      }
+
       return true;
     } catch (Exception e) {
       handleFailure(e);
@@ -75,7 +86,7 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
       // message as well:
       return Optional.empty();
     } else if (payload instanceof Kill) {
-      return Optional.of(stopChildren(actor -> actor.tellSystem(new Kill(), getSelf()), this::stopped));
+      return Optional.of(kill());
     } else if (payload instanceof ChildFailure) {
       handleChildFailure((LocalActor) message.getSender(), ((ChildFailure) payload).getCause());
 
@@ -91,6 +102,19 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
 
       // Stop all children, then restart:
       return Optional.of(stopChildren(child -> child.tellSystem(new Kill(), getSelf()), this::restart));
+    } else if (payload instanceof ReceiveTimeout) {
+      if (receiveTimeoutDuration != null) {
+        // If a receive timeout is still active, reset it and let the current receiver
+        // handle the timeout:
+        this.receiveTimeoutDuration = null;
+        this.receiveTimeout = null;
+        return Optional.empty();
+      } else {
+        // If a receive timeout is not currently active, don't report the message.
+        // This may happen if the receive timeout got cancelled while the timeout
+        // message was still scheduled for execution.
+        return Optional.of(getReceiver());
+      }
     }
 
     return Optional.empty();
@@ -102,7 +126,9 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     if (payload instanceof Restart) {
 
     } else if (payload instanceof Stop) {
-      return stopChildren(actor -> actor.tell(new Stop(), getSelf()), this::stopped);
+      return stop();
+    } else if (payload instanceof SpawnChild) {
+      spawn(((SpawnChild) payload).getFactory(), ((SpawnChild) payload).getName());
     }
 
     return currentReceiver;
@@ -133,6 +159,12 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
 
   private Receiver stopChildren(final Consumer<LocalActor> stopHandler, final Supplier<Receiver> continuation) {
     System.out.println("Stopping: " + getSelf().getName());
+
+    // Terminate any timers:
+    if (receiveTimeout != null) {
+      receiveTimeout.cancel(false);
+      receiveTimeoutDuration = null;
+    }
 
     // Notify the mailbox that it should be suspended:
     self.tellSystem(new MailboxSuspend(), getSelf());
@@ -249,6 +281,42 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     return actor;
   }
 
+  @Override
+  public Receiver stop() {
+    return stopChildren(actor -> actor.tell(new Stop(), getSelf()), this::stopped);
+  }
+
+  @Override
+  public Receiver kill() {
+    return stopChildren(actor -> actor.tellSystem(new Kill(), getSelf()), this::stopped);
+  }
+
+  @Override
+  public void setReceiveTimeout(final Duration timeout) {
+    if (receiveTimeout != null) {
+      receiveTimeout.cancel(false);
+    }
+
+    // Reset the timeout if "zero" is provided:
+    if (timeout.isZero()) {
+      this.receiveTimeoutDuration = null;
+      return;
+    }
+
+    this.receiveTimeoutDuration = timeout;
+
+    final Actor self = getSelf();
+
+    System.out.println("Scheduling timeout for " + getSelf().getName() + ": " + timeout);
+
+    receiveTimeout = getScheduler().schedule(
+        () -> {
+          self.tell(new ReceiveTimeout(), self);
+        },
+        Objects.requireNonNull(timeout, "timeout cannot be null")
+    );
+  }
+
   private class LocalMessageContext implements MessageContext {
     private final Actor sender;
 
@@ -289,6 +357,21 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     @Override
     public Actor spawn(final FactoryWithContext entry, final String name) {
       return LocalActorContext.this.spawn(entry, name);
+    }
+
+    @Override
+    public Receiver stop() {
+      return LocalActorContext.this.stop();
+    }
+
+    @Override
+    public Receiver kill() {
+      return LocalActorContext.this.kill();
+    }
+
+    @Override
+    public void setReceiveTimeout(final Duration timeout) {
+      LocalActorContext.this.setReceiveTimeout(timeout);
     }
   }
 }

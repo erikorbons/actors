@@ -5,7 +5,9 @@ import actors.ActorFactory;
 import actors.Mailbox;
 import actors.Message;
 import actors.Scheduler;
+import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.CompletionStage;
 
 public class LocalActor implements Actor {
   private final String name;
@@ -40,6 +42,26 @@ public class LocalActor implements Actor {
       public Actor getSender() {
         return sender;
       }
+    });
+  }
+
+  @Override
+  public CompletionStage<Void> awaitTermination(final Duration timeout) {
+    // TODO: implement.
+    return null;
+  }
+
+  @Override
+  public <T> void consume(final CompletionStage<T> value) {
+    Objects.requireNonNull(value, "value cannot be null");
+
+    value.handle((result, error) -> {
+      if (error != null) {
+        tell(error, this);
+      } else {
+        tell(result, this);
+      }
+      return null;
     });
   }
 

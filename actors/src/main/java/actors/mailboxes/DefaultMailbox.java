@@ -19,7 +19,7 @@ public class DefaultMailbox implements Mailbox {
   private final PrivateContext context;
   private final ConcurrentLinkedQueue<Message> systemQueue = new ConcurrentLinkedQueue<>();
   private final ConcurrentLinkedQueue<Message> queue = new ConcurrentLinkedQueue<>();
-  private final AtomicInteger status = new AtomicInteger(0);
+  private final AtomicInteger status = new AtomicInteger(STATUS_SUSPENDED);
 
   public DefaultMailbox(final PrivateContext context) {
     this.context = Objects.requireNonNull(context, "context cannot be null");
@@ -72,8 +72,6 @@ public class DefaultMailbox implements Mailbox {
   private void drain() {
     Message message;
 
-    System.out.println("Draining messages for: " + context.getSelf().getName());
-
     if ((status.get() & STATUS_TERMINATED) != 0) {
       return;
     }
@@ -124,8 +122,6 @@ public class DefaultMailbox implements Mailbox {
         }
       }
     }
-
-    System.out.println("Done draining messages for: " + context.getSelf().getName());
 
     // Reset the status:
     int currentStatus;

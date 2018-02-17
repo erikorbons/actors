@@ -3,6 +3,8 @@ package actors;
 import actors.dispatchers.ExecutorServiceScheduler;
 import actors.messages.Stop;
 import actors.receivers.MatchingReceiver.ReceiveMessageVoid;
+import java.time.Duration;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 
 public class Test {
@@ -20,7 +22,8 @@ public class Test {
         null,
         true
     );
-    final Scheduler scheduler = new ExecutorServiceScheduler(executor);
+    final Scheduler scheduler = new ExecutorServiceScheduler(executor,
+        Executors.newSingleThreadScheduledExecutor());
 
     scheduler.schedule(() -> {
       System.out.println("Scheduler executes");
@@ -28,6 +31,12 @@ public class Test {
 
     final Actor actor = actors.actors.LocalActor.factory(scheduler).spawn((context) -> {
       return Receiver.builder()
+          .equals("askignore", (msg, ctx) -> {
+            // Do nothing.
+          })
+          .equals("ask", (msg, ctx) -> {
+            ctx.getSender().tell("ask reply", ctx.getSelf());
+          })
           .match(String.class, (msg, ctx) -> {
             System.out.println("Main actor received: " + msg);
 
@@ -45,6 +54,13 @@ public class Test {
     }, "root");
 
     actor.tell("Hello, World!", actor);
+    actor.ask("ask", Duration.ofSeconds(10)).thenAccept(response -> {
+      System.out.println("Ask response: " + response);
+    });
+    actor.ask("askignore", Duration.ofSeconds(5)).handle((obj, throwable) -> {
+      System.out.println("Ask failed: " + throwable.getMessage());
+      return null;
+    });
 
     try {
       Thread.sleep(Long.MAX_VALUE);
@@ -79,5 +95,10 @@ public class Test {
         .beforeRestart(ctx -> System.out.println("Before restart"))
         .afterRestart(ctx -> System.out.println("After restart"))
         .build();
+  }
+
+  public interface Bla {
+    private void bla() {
+    }
   }
 }

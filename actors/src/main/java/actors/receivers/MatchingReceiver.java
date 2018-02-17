@@ -98,6 +98,14 @@ public class MatchingReceiver implements Receiver {
       return match(cls, msg -> true, receiver);
     }
 
+    public Builder matchAny(final ReceiveMessage<Object> receiver) {
+      return match(Object.class, receiver);
+    }
+
+    public Builder matchAny(final ReceiveMessageVoid<Object> receiver) {
+      return match(Object.class, receiver);
+    }
+
     public <C> Builder equals(final C obj, final ReceiveMessage<C> receiver) {
       receivers.add((msg, context) -> {
         if (msg.equals(obj)) {
