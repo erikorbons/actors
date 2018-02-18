@@ -4,17 +4,18 @@ import actors.Actor;
 import actors.ActorFactory;
 import actors.Mailbox;
 import actors.Message;
+import actors.Path;
 import actors.Scheduler;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
 
 public class LocalActor implements Actor {
-  private final String name;
+  private final Path path;
   private final Mailbox mailbox;
 
-  public LocalActor(final String name, final Mailbox mailbox) {
-    this.name = Objects.requireNonNull(name, "name cannot be null");
+  public LocalActor(final Path path, final Mailbox mailbox) {
+    this.path = Objects.requireNonNull(path, "path cannot be null");
     this.mailbox = Objects.requireNonNull(mailbox, "mailbox cannot be null");
   }
 
@@ -23,8 +24,8 @@ public class LocalActor implements Actor {
   }
 
   @Override
-  public String getName() {
-    return name;
+  public Path getPath() {
+    return path;
   }
 
   @Override
@@ -80,5 +81,10 @@ public class LocalActor implements Actor {
         return sender;
       }
     });
+  }
+
+  @Override
+  public String toString() {
+    return "LocalActor[" + getPath().getFullName() + "]";
   }
 }

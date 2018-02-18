@@ -4,10 +4,12 @@ import actors.Actor;
 import actors.ActorFactory;
 import actors.Mailbox;
 import actors.Message;
+import actors.Path;
 import actors.Scheduler;
 import actors.mailboxes.DefaultMailbox;
 import actors.messages.MailboxUnsuspend;
 import java.util.Objects;
+import java.util.Optional;
 
 public class LocalActorFactory implements ActorFactory {
   private final Scheduler scheduler;
@@ -38,7 +40,11 @@ public class LocalActorFactory implements ActorFactory {
 
     // Create an actor handler that dispatches messages to the previously created
     // mailbox:
-    final LocalActor actor = new LocalActor(name, mailbox);
+    final LocalActor actor = new LocalActor(
+        Optional.ofNullable(parent).map(p -> Path.of(p.getPath(), name))
+            .orElseGet(() -> Path.of(name)),
+        mailbox
+    );
 
     // Initialize the context with the newly created actor:
     context.initialize(actor, entry);

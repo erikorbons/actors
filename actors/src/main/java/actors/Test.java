@@ -58,7 +58,7 @@ public class Test {
       System.out.println("Ask response: " + response);
     });
     actor.ask("askignore", Duration.ofSeconds(5)).handle((obj, throwable) -> {
-      System.out.println("Ask failed: " + throwable.getMessage());
+      System.out.println("Ask failed: " + throwable);
       return null;
     });
 
@@ -77,7 +77,7 @@ public class Test {
             childActor.tell("Hello, World! (for child of child)", ctx.getSelf());
           }
           Thread.sleep((long)(Math.random() * 500));
-          System.out.println(Thread.currentThread().getId() + ": Child actor " + name + " received: " + msg);
+          System.out.println(Thread.currentThread().getId() + ": Child actor " + ctx.getSelf() + " received: " + msg);
 
         })
         .build();

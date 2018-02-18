@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 public interface Actor {
-  String getName();
+  Path getPath();
   void tell(Object message, Actor sender);
 
   default CompletionStage<Object> ask(final Actor target, final Object message,

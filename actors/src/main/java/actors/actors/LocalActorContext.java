@@ -80,7 +80,7 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
 
     if (payload instanceof ChildTerminated) {
       // Remove the child from the child mapping:
-      children.remove(message.getSender().getName());
+      children.remove(message.getSender().getPath());
 
       // Don't return a new receiver, let the non-system receiver handle the
       // message as well:
@@ -135,7 +135,7 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
   }
 
   private void handleChildFailure(final LocalActor child, final Exception cause) throws Exception {
-    System.out.println("Child failed: " + child.getName());
+    System.out.println("Child failed: " + child.getPath());
 
     final FailureAction action = getReceiver().handleFailure(cause)
         .orElse(FailureAction.RESTART);
@@ -158,7 +158,7 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
   }
 
   private Receiver stopChildren(final Consumer<LocalActor> stopHandler, final Supplier<Receiver> continuation) {
-    System.out.println("Stopping: " + getSelf().getName());
+    System.out.println("Stopping: " + getSelf().getPath());
 
     // Terminate any timers:
     if (receiveTimeout != null) {
@@ -193,7 +193,7 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
   }
 
   private Receiver stopped() {
-    System.out.println("Stopped: " + getSelf().getName());
+    System.out.println("Stopped: " + getSelf().getPath());
 
     // Terminate the mailbox:
     self.tellSystem(new MailboxTerminate(), getSelf());
@@ -307,7 +307,7 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
 
     final Actor self = getSelf();
 
-    System.out.println("Scheduling timeout for " + getSelf().getName() + ": " + timeout);
+    System.out.println("Scheduling timeout for " + getSelf().getPath() + ": " + timeout);
 
     receiveTimeout = getScheduler().schedule(
         () -> {
