@@ -2,6 +2,7 @@ package actors.actors;
 
 import actors.Actor;
 import actors.Message;
+import actors.Message.PublishMode;
 import actors.MessageContext;
 import actors.PrivateContext;
 import actors.Receiver;
@@ -51,22 +52,48 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
   @Override
   public boolean dispatchMessage(final Message message) {
     try {
-      // Handle system messages first:
-      final Optional<Receiver> systemReceiver = handleSystemMessages(message);
-      if (systemReceiver.isPresent()) {
-        currentReceiver = systemReceiver.get();
-        return true;
-      }
+      if (message.getPublishMode() != PublishMode.PUBLISH_ONLY) {
+        // Handle system messages first:
+        final Optional<Receiver> systemReceiver = handleSystemMessages(message);
+        if (systemReceiver.isPresent()) {
+          currentReceiver = systemReceiver.get();
+          return true;
+        }
 
-      // Handle "normal" messages and system messages whose handling can be overridden:
-      currentReceiver = getReceiver()
+        // Handle "normal" messages and system messages whose handling can be overridden:
+        currentReceiver = getReceiver()
             .receive(message.getPayload(), new LocalMessageContext(message.getSender()))
             .orElseGet(() -> handleOverridableSystemMessages(message));
 
-      // Reset the receive timeout, if one is available:
-      if (receiveTimeoutDuration != null) {
-        setReceiveTimeout(receiveTimeoutDuration);
+        // Reset the receive timeout, if one is available:
+        if (receiveTimeoutDuration != null) {
+          setReceiveTimeout(receiveTimeoutDuration);
+        }
       }
+
+      // Dispatch the message to children if publishing is enabled:
+      message.getPublishFilter().ifPresent(filter -> {
+        final Object payload = message.getPayload();
+        final Actor sender = message.getSender();
+
+        if ("#".equals(filter.getLevel())) {
+          children.values().stream()
+              .forEach(child -> child.publish(filter, message.getPayload(), message.getSender()));
+        } else if ("+".equals(filter.getLevel())) {
+          filter.getRemainder().ifPresentOrElse(
+              remainder -> children.values().forEach(
+                  child -> child.publish(remainder, message.getPayload(), message.getSender())),
+              () -> children.values()
+                  .forEach(child -> child.tell(message.getPayload(), message.getSender()))
+          );
+        } else {
+          Optional.ofNullable(children.get(filter.getLevel()))
+              .ifPresent(child -> filter.getRemainder().ifPresentOrElse(
+                  remainder -> child.publish(remainder, message.getPayload(), message.getSender()),
+                  () -> child.tell(message.getPayload(), message.getSender())
+              ));
+        }
+      });
 
       return true;
     } catch (Exception e) {

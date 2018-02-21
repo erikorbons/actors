@@ -11,6 +11,7 @@ import java.util.concurrent.CompletionStage;
 public interface Actor {
   Path getPath();
   void tell(Object message, Actor sender);
+  void publish(Filter filter, Object message, Actor sender);
 
   default CompletionStage<Object> ask(final Actor target, final Object message,
       final Duration timeout) {

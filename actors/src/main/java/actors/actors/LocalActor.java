@@ -2,12 +2,14 @@ package actors.actors;
 
 import actors.Actor;
 import actors.ActorFactory;
+import actors.Filter;
 import actors.Mailbox;
 import actors.Message;
 import actors.Path;
 import actors.Scheduler;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 
 public class LocalActor implements Actor {
@@ -42,6 +44,45 @@ public class LocalActor implements Actor {
       @Override
       public Actor getSender() {
         return sender;
+      }
+
+      @Override
+      public Optional<Filter> getPublishFilter() {
+        return Optional.empty();
+      }
+
+      @Override
+      public PublishMode getPublishMode() {
+        return PublishMode.LOCAL_AND_PUBLISH;
+      }
+    });
+  }
+
+  @Override
+  public void publish(Filter filter, Object message, Actor sender) {
+    Objects.requireNonNull(filter, "filter cannot be null");
+    Objects.requireNonNull(message, "message cannot be null");
+    Objects.requireNonNull(sender, "sender cannot be null");
+
+    mailbox.enqueue(new Message() {
+      @Override
+      public Object getPayload() {
+        return message;
+      }
+
+      @Override
+      public Actor getSender() {
+        return sender;
+      }
+
+      @Override
+      public PublishMode getPublishMode() {
+        return PublishMode.PUBLISH_ONLY;
+      }
+
+      @Override
+      public Optional<Filter> getPublishFilter() {
+        return Optional.of(filter);
       }
     });
   }
@@ -79,6 +120,16 @@ public class LocalActor implements Actor {
       @Override
       public Actor getSender() {
         return sender;
+      }
+
+      @Override
+      public Optional<Filter> getPublishFilter() {
+        return Optional.empty();
+      }
+
+      @Override
+      public PublishMode getPublishMode() {
+        return PublishMode.LOCAL_AND_PUBLISH;
       }
     });
   }

@@ -2,6 +2,7 @@ package actors.actors;
 
 import actors.Actor;
 import actors.ActorFactory;
+import actors.Filter;
 import actors.Mailbox;
 import actors.Message;
 import actors.Path;
@@ -61,6 +62,16 @@ public class LocalActorFactory implements ActorFactory {
       @Override
       public Actor getSender() {
         return actor;
+      }
+
+      @Override
+      public PublishMode getPublishMode() {
+        return PublishMode.LOCAL_AND_PUBLISH;
+      }
+
+      @Override
+      public Optional<Filter> getPublishFilter() {
+        return Optional.empty();
       }
     });
 
