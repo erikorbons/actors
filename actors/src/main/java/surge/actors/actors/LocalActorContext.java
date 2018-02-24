@@ -1,5 +1,7 @@
 package surge.actors.actors;
 
+import java.util.HashSet;
+import java.util.Set;
 import surge.actors.Actor;
 import surge.actors.Message;
 import surge.actors.Message.PublishMode;
@@ -8,6 +10,7 @@ import surge.actors.PrivateContext;
 import surge.actors.Receiver;
 import surge.actors.Receiver.FailureAction;
 import surge.actors.Scheduler;
+import surge.actors.messages.ActorTerminated;
 import surge.actors.messages.ChildFailure;
 import surge.actors.messages.ChildRestarted;
 import surge.actors.messages.Kill;
@@ -28,12 +31,17 @@ import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import surge.actors.messages.Unwatch;
+import surge.actors.messages.Watch;
+import surge.actors.messages.Watching;
 
 public class LocalActorContext extends LocalActorFactory implements PrivateContext {
 
   private final LocalActor parentActor;
 
   private final Map<String, LocalActor> children = new HashMap<>();
+  private final Set<Actor> watchingActors = new HashSet<>();
+  private final Set<Actor> watchedActors = new HashSet<>();
 
   // Mutable actor state:
   private FactoryWithContext initialFactory;
@@ -41,6 +49,7 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
   private Receiver currentReceiver;
   private Duration receiveTimeoutDuration = null;
   private ScheduledFuture<?> receiveTimeout = null;
+  private boolean terminated = false;
 
   public LocalActorContext(final LocalActor parentActor, final Scheduler scheduler) {
     super(scheduler);
@@ -53,6 +62,13 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
   public boolean dispatchMessage(final Message message) {
     try {
       if (message.getPublishMode() != PublishMode.PUBLISH_ONLY) {
+        // Handle omnipotent system messages:
+        final Optional<Receiver> omnipotentReceiver = handleOmnipotentSystemMessages(message);
+        if (omnipotentReceiver.isPresent() || terminated) {
+          currentReceiver = omnipotentReceiver.orElse(getReceiver());
+          return true;
+        }
+
         // Handle system messages first:
         final Optional<Receiver> systemReceiver = handleSystemMessages(message);
         if (systemReceiver.isPresent()) {
@@ -102,6 +118,27 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     }
   }
 
+  private Optional<Receiver> handleOmnipotentSystemMessages(final Message message) throws Exception {
+    final Object payload = message.getPayload();
+
+    if (payload instanceof Watch) {
+      if (!terminated) {
+        if (!this.watchingActors.contains(message.getSender())) {
+          this.watchingActors.add(message.getSender());
+          message.getSender().tell(new Watching(self), self);
+        }
+      } else {
+        message.getSender().tell(new ActorTerminated(self), self);
+      }
+
+      return Optional.of(getReceiver());
+    } else if (payload instanceof Unwatch) {
+      this.watchingActors.remove(message.getSender());
+    }
+
+    return Optional.empty();
+  }
+
   private Optional<Receiver> handleSystemMessages(final Message message) throws Exception {
     final Object payload = message.getPayload();
 
@@ -142,6 +179,9 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
         // message was still scheduled for execution.
         return Optional.of(getReceiver());
       }
+    } else if (payload instanceof ActorTerminated) {
+      watchedActors.remove(((ActorTerminated) payload).getActor());
+      return Optional.empty();
     }
 
     return Optional.empty();
@@ -229,6 +269,12 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     if (parentActor != null) {
       parentActor.tellSystem(new ChildTerminated(), getSelf());
     }
+
+    // Notify all watching actors:
+    watchingActors.stream()
+        .forEach(watcher -> watcher.tell(new ActorTerminated(self), self));
+
+    terminated = true;
 
     return Receiver.builder().build();
   }
@@ -344,6 +390,23 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     );
   }
 
+  @Override
+  public void watch(final Actor actorToWatch) {
+    if (watchedActors.contains(actorToWatch)) {
+      return;
+    }
+
+    watchedActors.add(actorToWatch);
+    actorToWatch.tell(new Watch(), getSelf());
+  }
+
+  @Override
+  public void unwatch(final Actor actorToUnwatch) {
+    if (watchedActors.remove(actorToUnwatch)) {
+      actorToUnwatch.tell(new Unwatch(), getSelf());
+    }
+  }
+
   private class LocalMessageContext implements MessageContext {
     private final Actor sender;
 
@@ -399,6 +462,16 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     @Override
     public void setReceiveTimeout(final Duration timeout) {
       LocalActorContext.this.setReceiveTimeout(timeout);
+    }
+
+    @Override
+    public void watch(Actor actorToWatch) {
+      LocalActorContext.this.watch(actorToWatch);
+    }
+
+    @Override
+    public void unwatch(Actor actorToUnwatch) {
+      LocalActorContext.this.unwatch(actorToUnwatch);
     }
   }
 }

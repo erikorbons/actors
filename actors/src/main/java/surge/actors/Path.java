@@ -57,6 +57,23 @@ public interface Path {
     public String toString() {
       return getFullName();
     }
+
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      return Objects.equals(name, ((RootPath) o).name);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(name);
+    }
   }
 
   final class SubPath implements Path {
@@ -85,6 +102,25 @@ public interface Path {
     @Override
     public String toString() {
       return getFullName();
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      final SubPath subPath = (SubPath) o;
+      return Objects.equals(parent, subPath.parent) &&
+          Objects.equals(name, subPath.name);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(parent, name);
     }
   }
 }

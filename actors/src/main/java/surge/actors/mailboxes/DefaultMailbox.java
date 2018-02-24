@@ -39,10 +39,6 @@ public class DefaultMailbox implements Mailbox {
 
   @Override
   public void enqueueSystemMessage(final Message message) {
-    if ((status.get() & STATUS_TERMINATED) != 0) {
-      return;
-    }
-
     systemQueue.add(message);
 
     // Schedule delivery:
@@ -103,16 +99,14 @@ public class DefaultMailbox implements Mailbox {
             break;
           }
         }
-        systemQueue.clear();
         queue.clear();
-        return;
       } else {
         context.dispatchMessage(message);
       }
     }
 
     // Process non-system messages only if the mailbox is not suspended:
-    if ((status.get() & STATUS_SUSPENDED) == 0) {
+    if ((status.get() & (STATUS_SUSPENDED | STATUS_TERMINATED)) == 0) {
       while ((message = queue.poll()) != null) {
         if (!context.dispatchMessage(message)) {
           // Stop dispatching if dispatching the message fails. This defers further

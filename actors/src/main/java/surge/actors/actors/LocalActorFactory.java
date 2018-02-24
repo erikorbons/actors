@@ -34,7 +34,7 @@ public class LocalActorFactory implements ActorFactory {
 
     // Create a blank context for the actor, with initial state and without a
     // parent actor.
-    final LocalActorContext context = new LocalActorContext(parent, scheduler);
+    final LocalActorContext context = createContext(parent, scheduler);
 
     // Create a mailbox that dispatches to the previously created actor context:
     final Mailbox mailbox = new DefaultMailbox(context);
@@ -76,5 +76,9 @@ public class LocalActorFactory implements ActorFactory {
     });
 
     return actor;
+  }
+
+  protected LocalActorContext createContext(final LocalActor parent, final Scheduler scheduler) {
+    return new LocalActorContext(parent, scheduler);
   }
 }

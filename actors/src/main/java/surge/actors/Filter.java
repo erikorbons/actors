@@ -32,8 +32,11 @@ public interface Filter {
   static Filter of(final String filter) {
     Objects.requireNonNull(filter, "filter cannot be null");
 
-    final String[] parts = filter.split("/+");
+    return ofParts(filter.split("/+"));
 
+  }
+
+  static Filter ofParts(final String ... parts) {
     Filter currentFilter = new TerminalFilter(parts[parts.length - 1]);
 
     for (int i = parts.length - 2; i >= 0; -- i) {
@@ -41,6 +44,13 @@ public interface Filter {
     }
 
     return currentFilter;
+  }
+
+  static Filter fromPath(final Path path) {
+    return ofParts(Objects
+        .requireNonNull(path, "path cannot be null")
+        .getElements()
+        .toArray(n -> new String[n]));
   }
 
   class TerminalFilter implements Filter {

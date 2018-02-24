@@ -34,3 +34,9 @@ project(':actors') {
         testCompile 'junit:junit:4.12'
     }
 }
+
+project(':actors-bridge') {
+    dependencies {
+        compile project(':actors')
+    }
+}

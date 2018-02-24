@@ -12,6 +12,8 @@ public interface Context extends ActorFactory {
   Receiver stop();
   Receiver kill();
   void setReceiveTimeout(Duration timeout);
+  void watch(Actor actorToWatch);
+  void unwatch(Actor actorToUnwatch);
 
   default Actor spawn(Factory entry) {
     return spawn(context -> entry.apply());
