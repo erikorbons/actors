@@ -8,7 +8,8 @@ import surge.actors.Path;
 import surge.actors.Receiver;
 import surge.actors.bridge.messages.ExternalMessage;
 import surge.actors.messages.ActorTerminated;
-import surge.actors.messages.Watch;
+import surge.actors.messages.Ping;
+import surge.actors.messages.PingResponse;
 import surge.actors.messages.Watching;
 
 public abstract class MessageDispatcher {
@@ -30,12 +31,13 @@ public abstract class MessageDispatcher {
                     final Filter filter = Filter.fromPath(destination);
 
                     mainActor.publish(filter, msg.getPayload(), msg.getSender());
-                    mainActor.publish(filter, new Watch(), ctx.getSelf());
+                    mainActor.publish(filter, new Ping(), ctx.getSelf());
                   }
               );
         })
-        .match(Watching.class, (watching, ctx) -> {
-          actors.put(watching.getActor().getPath(), watching.getActor());
+        .match(PingResponse.class, (pingResponse, ctx) -> {
+          ctx.watch(ctx.getSender());
+          actors.put(ctx.getSender().getPath(), ctx.getSender());
         })
         .match(ActorTerminated.class, (terminated, ctx) -> {
           actors.remove(terminated.getActor().getPath());

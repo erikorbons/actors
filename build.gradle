@@ -15,13 +15,9 @@ subprojects {
 }
 
 project(':core') {
-    apply plugin: 'java'
-
 }
 
 project(':actors') {
-    apply plugin: 'java'
-
     // In this section you declare the dependencies for your production and test code
     dependencies {
         // The production code uses the SLF4J logging API at compile time
@@ -38,5 +34,15 @@ project(':actors') {
 project(':actors-bridge') {
     dependencies {
         compile project(':actors')
+
+        testCompile project(':actors-test')
+    }
+}
+
+project(':actors-test') {
+    dependencies {
+        compile project(':actors')
+
+        compile 'junit:junit:4.12'
     }
 }

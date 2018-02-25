@@ -17,6 +17,8 @@ import surge.actors.messages.Kill;
 import surge.actors.messages.MailboxSuspend;
 import surge.actors.messages.MailboxTerminate;
 import surge.actors.messages.MailboxUnsuspend;
+import surge.actors.messages.Ping;
+import surge.actors.messages.PingResponse;
 import surge.actors.messages.ReceiveTimeout;
 import surge.actors.messages.Restart;
 import surge.actors.messages.SpawnChild;
@@ -182,6 +184,9 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     } else if (payload instanceof ActorTerminated) {
       watchedActors.remove(((ActorTerminated) payload).getActor());
       return Optional.empty();
+    } else if (payload instanceof Ping) {
+      message.getSender().tell(new PingResponse(), getSelf());
+      return Optional.of(getReceiver());
     }
 
     return Optional.empty();
@@ -273,6 +278,11 @@ public class LocalActorContext extends LocalActorFactory implements PrivateConte
     // Notify all watching actors:
     watchingActors.stream()
         .forEach(watcher -> watcher.tell(new ActorTerminated(self), self));
+
+    // Unsubscribe from all actors being watched:
+    watchedActors.stream()
+        .forEach(this::unwatch);
+    watchedActors.clear();
 
     terminated = true;
 

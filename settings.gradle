@@ -17,6 +17,7 @@ include 'services:webservice'
 
 rootProject.name = 'surge'
 
+include 'core'
 include 'actors'
 include 'actors-bridge'
-include 'core'
+include 'actors-test'
